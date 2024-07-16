@@ -461,7 +461,7 @@ class FileShow {
                 let time = new Date(timeUtc).format("yyyy-MM-dd<br>hh:mm:ss")
                 dom_writeTime.innerHTML = time;
             }
-            await M.bulkView.load2();
+            await M.bulkView.load2(M.fileLoad.getFlagFile());
         }
 
     }
