@@ -43,6 +43,7 @@ public class WebServerController {
         webServer.RouteAdd("/api/sort2", GetSort2);
 
         webServer.RouteAdd("/api/directory/getSiblingDir", GetSiblingDir);
+        webServer.RouteAdd("/api/directory/getFolderScanResult", GetFolderScanResult);
         webServer.RouteAdd("/api/directory/getFiles2", GetFiles2);
         webServer.RouteAdd("/api/directory/getFiles", GetFiles);
         webServer.RouteAdd("/api/directory/getDirectories", GetDirectories);
@@ -614,6 +615,15 @@ public class WebServerController {
     }
 
     #region Directory
+
+    /// <summary>
+    /// 取得目前為止的資料夾掃描結果
+    /// </summary>
+    private void GetFolderScanResult(RequestData d) {
+        var wvdir = new WV_Directory();
+        var result = wvdir.GetFolderScanResult();
+        WriteString(d, result);
+    }
 
     /// <summary>
     /// 取得跟自己同層的資料夾內的檔案資料(自然排序的前5筆)

@@ -1,5 +1,7 @@
-﻿using System.IO;
+using System.Collections.Concurrent;
+using System.IO;
 using System.Runtime.InteropServices;
+using Tiefsee.Lib;
 
 namespace Tiefsee;
 
@@ -13,6 +15,15 @@ public class WV_Directory {
     }
     public WV_Directory() { }
 
+    private static FolderScanHandler _folderScanHandler = new();
+
+    /// <summary>
+    /// 取得到目前為止的資料夾掃描結果
+    /// </summary>
+    /// <returns></returns>
+    public string GetFolderScanResult() {
+        return _folderScanHandler.GetCurrentResult();
+    }
 
     /// <summary>
     /// 取得跟自己同層的資料夾內的檔案資料(自然排序的前4筆)
@@ -34,7 +45,7 @@ public class WV_Directory {
             .ToArray();
 
         string parentPath = Path.GetDirectoryName(siblingPath); // 取得父親資料夾
-        Dictionary<string, List<string>> output = new();
+        ConcurrentDictionary<string, List<string>> output = new();
 
         string[] arDir = new string[0];
         try { // 如果取得所有資料夾失敗，就只處理自己目前的資料夾
@@ -58,48 +69,53 @@ public class WV_Directory {
             arDir = new string[] { siblingPath }; // 只處理自己
         }
 
-        foreach (var dirPath in arDir) { // 所有子資料夾
-            string dirName = Path.GetFileName(dirPath);
+        _folderScanHandler.Reset();
+        var options = new ParallelOptions {
+            MaxDegreeOfParallelism = Environment.ProcessorCount
+        };
+        Parallel.ForEach(arDir, options, dirPath => {
+            var dirName = Path.GetFileName(dirPath);
             string[] arFile;
             try {
                 // arFile = Directory.GetFiles(dirPath);
                 if (arExt.Length == 0) {
-                    // 取得資料夾內前4個檔案的檔名
+                    // 先取一個檔案的檔名以增加讀取資料夾的速度
                     arFile = Directory.EnumerateFiles(dirPath, "*.*")
-                        .Select(filePath => Path.GetFileName(filePath)).Take(4).ToArray();
+                        .Select(Path.GetFileName).Take(1).ToArray();
                 }
                 else {
-                    // 以副檔名來篩選，取得資料夾內前4個檔案的檔名
+                    // 以副檔名來篩選，先取一個檔案以增加讀取資料夾的速度
                     var query = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.TopDirectoryOnly)
                         .Where(file => arExt.Contains(Path.GetExtension(file).ToLower(), StringComparer.Ordinal));
-                    arFile = query.Take(4).Select(f => Path.GetFileName(f)).ToArray();
+                    arFile = query.Take(1).Select(Path.GetFileName).ToArray();
                 }
             }
             catch {
-                continue;
+                return;
             }
-            if (arFile.Length == 0) {
-                continue;
-            }
+
+            if (arFile.Length == 0)
+                return;
 
             //檔名自然排序
             /*int len = arFile.Length;
             if (len > 51) { len = 51; }
             Array.Sort(arFile,  new NaturalSort());*/
 
-            foreach (string item in arFile) {
-                if (output.ContainsKey(dirName) == false) { // 以資料夾名稱當做 key
-                    output.Add(dirName, new List<string>());
-                }
+            foreach (var item in arFile) {
+                // 以資料夾名稱當做 key
+                output.TryAdd(dirName, []);
                 output[dirName].Add(item);
             }
 
-        }
+            // 將資料夾路徑加入掃描任務 格式為 "資料夾路徑;需排除檔案名(已加入列表)"
+            _folderScanHandler.EnqueueTaskData($"{dirPath};{output[dirName][0]}");
+        });
 
         // 如果取得的名單內不包含自己，就補上
         string siblingPathName = Path.GetFileName(siblingPath);
         if (output.ContainsKey(siblingPathName) == false) {
-            output.Add(siblingPathName, new List<string>());
+            output.TryAdd(siblingPathName, new List<string>());
             try {
                 // 取得資料夾內前4個檔案的檔名
                 string[] arFile = Directory.EnumerateFiles(siblingPath, "*.*")
@@ -111,7 +127,35 @@ public class WV_Directory {
             catch { }
         }
 
+        StartFolderScanningTask(arExt);
         return System.Text.Json.JsonSerializer.Serialize(output);
+    }
+
+    private static IEnumerable<string> GetImageFileInsideFolder(string folderName, string[] ext,
+        CancellationToken cancellationToken, int takeCount,
+        string exclude) {
+        List<string> result = [];
+        var count = 0;
+        foreach (var file in Directory.EnumerateFiles(folderName)) {
+            var fileName = Path.GetFileName(file);
+            if (fileName == exclude || (ext.Length > 0 && !ext.Contains(Path.GetExtension(file)))) {
+                continue;
+            }
+
+            count++;
+            if (count > takeCount || cancellationToken.IsCancellationRequested) {
+                break;
+            }
+
+            result.Add(file);
+        }
+
+        return result;
+    }
+
+    private static void StartFolderScanningTask(string[] ext) {
+        _folderScanHandler.StartTask((queueData) => queueData.Split(";"),
+            GetImageFileInsideFolder, ext);
     }
 
     /// <summary>

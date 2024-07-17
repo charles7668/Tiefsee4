@@ -46,6 +46,8 @@ class MainDirList {
 		var temp_count = 0;
 		var temp_itemHeight = 0; // 用於判斷物件高度是否需要更新
 
+		var folder_map: Map<string, HTMLElement> = new Map<string, HTMLElement>;
+
 		var sc = new TiefseeScroll(); // 滾動條元件
 		sc.initGeneral(dom_dirList, "y");
 
@@ -246,11 +248,52 @@ class MainDirList {
 
 			let end = start + count;
 			if (end > arDirKey.length) { end = arDirKey.length }
+			folder_map.clear();
 			for (let i = start; i < end; i++) {
-				newItem(i, arDirKey[i], arDir[arDirKey[i]], noDelay);
+				let div = newItem(i, arDirKey[i], arDir[arDirKey[i]], noDelay);
+				folder_map.set(arDirKey[i], div);
 			}
 
 			select();
+			let fetchScanId = setInterval(async () => {
+				await fetchFolderScanResult(fetchScanId);
+			}, 50);
+		}
+
+		/**
+		 * 加入目前資料夾掃描結果
+		 * @param fetchScanId
+		 */
+		async function fetchFolderScanResult(fetchScanId: number) {
+			let json = await WebAPI.Directory.getFolderScanResult();
+			if (json === undefined)
+			{
+				clearInterval(fetchScanId);
+			}
+			for (let key of Object.keys(json)) {
+				if (key === "completed") {
+					clearInterval(fetchScanId);
+					continue;
+				}
+				if (folder_map.has(key)) {
+					let div = folder_map.get(key);
+					if (div === undefined)
+						continue;
+					let imgBox = div.getElementsByClassName("dirList-imgbox")[0] as HTMLElement;
+					let list = json[key];
+					for (let i = 0; i < list.length; i++) {
+						if (i + 1 >= imgNumber)
+							break;
+						let imgUrl = getImgUrl(list[i]);
+						let htmlImg = `<img src="${imgUrl}" fetchpriority="low"/>`;
+						let imgBoxInner = document.createElement("div");
+						imgBoxInner.classList.add("dirList-img" , `dirList-img__${imgNumber}`);
+						imgBoxInner.setAttribute("data-imgid" , `${i + 1}`);
+						imgBoxInner.innerHTML = htmlImg;
+						imgBox.append(imgBoxInner);
+					}
+				}
+			}
 		}
 
 		/**

@@ -30,6 +30,15 @@ class WebAPI {
         }
 
         /**
+         * 取得資料夾掃描的結果
+         */
+        static async getFolderScanResult() {
+            let url = APIURL + "/api/directory/getFolderScanResult";
+            let postData = {};
+            return await WebAPI.sendPost(url, postData);
+        }
+
+        /**
          * 傳入路徑集合，回傳每個資料夾内的檔案
          * @param arPath 路徑集合
          */
