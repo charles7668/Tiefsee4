@@ -147,7 +147,7 @@ public class WV_Directory {
                 break;
             }
 
-            result.Add(file);
+            result.Add(fileName);
         }
 
         return result;

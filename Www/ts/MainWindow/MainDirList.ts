@@ -281,10 +281,12 @@ class MainDirList {
 						continue;
 					let imgBox = div.getElementsByClassName("dirList-imgbox")[0] as HTMLElement;
 					let list = json[key];
+					M.fileLoad.appendToFolderFileList(key, list);
 					for (let i = 0; i < list.length; i++) {
 						if (i + 1 >= imgNumber)
 							break;
-						let imgUrl = getImgUrl(list[i]);
+						const path = Lib.Combine([key, list[i]]);
+						let imgUrl = getImgUrl(path);
 						let htmlImg = `<img src="${imgUrl}" fetchpriority="low"/>`;
 						let imgBoxInner = document.createElement("div");
 						imgBoxInner.classList.add("dirList-img" , `dirList-img__${imgNumber}`);
